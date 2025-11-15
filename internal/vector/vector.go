@@ -6,6 +6,18 @@ import (
 
 type SVector3 [3]float32
 
+func (v SVector3) X() float32 {
+	return v[0]
+}
+
+func (v SVector3) Y() float32 {
+	return v[1]
+}
+
+func (v SVector3) Z() float32 {
+	return v[2]
+}
+
 func almostEqual(a, b, epsilon float32) bool {
 	dif := float64(a - b)
 	return math.Abs(dif) < float64(epsilon)

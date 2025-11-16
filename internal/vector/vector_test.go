@@ -91,7 +91,7 @@ func TestSub(t *testing.T) {
 func TestScale(t *testing.T) {
 	tests := []struct {
 		left   SVector3
-		right  float32
+		right  float64
 		result SVector3
 	}{
 		{
@@ -124,7 +124,7 @@ func TestScale(t *testing.T) {
 func TestMag(t *testing.T) {
 	tests := []struct {
 		left   SVector3
-		result float32
+		result float64
 	}{
 		{
 			left:   SVector3{0, 0, 0},
@@ -153,7 +153,7 @@ func TestDot(t *testing.T) {
 	tests := []struct {
 		left   SVector3
 		right  SVector3
-		result float32
+		result float64
 	}{
 		{
 			left:   SVector3{0, 0, 0},
@@ -216,7 +216,7 @@ func TestCross(t *testing.T) {
 }
 
 func TestNorm(t *testing.T) {
-	eqVecNorm := float32(0.57735026)
+	eqVecNorm := float64(0.57735026)
 	tests := []struct {
 		left   SVector3
 		result SVector3

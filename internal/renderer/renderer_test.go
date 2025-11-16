@@ -1,19 +1,11 @@
 package renderer
 
 import (
-	"github.com/smithhmark/gotracer/internal/vector"
 	"image"
-	"math"
 	"testing"
-)
 
-func almost(l, r float64) bool {
-	ep := 0.000001
-	if math.Abs(l-r) < ep {
-		return true
-	}
-	return false
-}
+	"github.com/smithhmark/gotracer/internal/vector"
+)
 
 func TestCanvasToViewport(t *testing.T) {
 	tests := []struct {

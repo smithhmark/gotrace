@@ -41,7 +41,7 @@ func TestCanvasToViewport(t *testing.T) {
 	}
 }
 
-func TestLightHelper(t *testing.T) {
+func TestLightHelperDiffuse(t *testing.T) {
 	//l, n vector.SVector3, intensity float64) float64 {
 	tests := []struct {
 		l         vector.SVector3
@@ -75,7 +75,7 @@ func TestLightHelper(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		res := lightHelper(test.l, test.n, test.intensity)
+		res := lightHelperDiffuse(test.l, test.n, test.intensity)
 		if !almost(res, test.expected, 0.001) {
 			t.Errorf("lightHelper(%v, %v, %v) != %v, got: %v",
 				test.l, test.n, test.intensity, test.expected, res)
@@ -83,7 +83,7 @@ func TestLightHelper(t *testing.T) {
 	}
 }
 
-func TestComputeLight(t *testing.T) {
+func TestComputeLight_diffuse(t *testing.T) {
 	tests := []struct {
 		ill      Illumination
 		point    vector.SVector3
@@ -181,9 +181,11 @@ func TestComputeLight(t *testing.T) {
 			math.Sqrt(2) / 2.0,
 		},
 	}
+	specular := -1.0 // magic number to signal no specular lighting
+	viewer := vector.SVector3{}
 
 	for tno, test := range tests {
-		rcvd := test.ill.ComputeLight(test.point, test.normal)
+		rcvd := test.ill.ComputeLight(test.point, test.normal, viewer, specular)
 		if !almost(rcvd, test.expected, 0.0001) {
 			t.Errorf("test: %d:ComputeLight()  != %v, got: %v",
 				tno, test.expected, rcvd)

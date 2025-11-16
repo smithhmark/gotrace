@@ -17,11 +17,11 @@ type Illumination struct {
 	Positional []LightSource
 }
 
-func (i Illumination) ComputeLight(p, n vector.SVector3) float64 {
+func (i Illumination) ComputeLight(p, n, v vector.SVector3, s float64) float64 {
 	atPoint := i.Ambient
 
 	for _, lightSource := range i.Positional {
-		atPoint += lightSource.ContributeLight(p, n)
+		atPoint += lightSource.ContributeLight(p, n, v, s)
 	}
 	return atPoint
 }
@@ -31,7 +31,7 @@ type PointLight struct {
 	Intensity float64
 }
 
-func lightHelper(l, n vector.SVector3, intensity float64) float64 {
+func lightHelperDiffuse(l, n vector.SVector3, intensity float64) float64 {
 	dot := n.Dot(l)
 	if dot > 0 {
 		tmp := dot / (n.Mag() * l.Mag())
@@ -40,9 +40,24 @@ func lightHelper(l, n vector.SVector3, intensity float64) float64 {
 	return 0
 }
 
-func (pl PointLight) ContributeLight(p, n vector.SVector3) float64 {
+func lightHelperSpecular(l, n, v vector.SVector3, intensity, specular float64) float64 {
+	if specular != -1 {
+		r := n.Scale(2.0 * n.Dot(l)).Sub(l)
+		dot := r.Dot(v)
+		if dot > 0 {
+			tmp := dot / (r.Mag() * v.Mag())
+			tmp = math.Pow(tmp, specular)
+			return intensity * tmp
+		}
+	}
+	return 0
+
+}
+
+func (pl PointLight) ContributeLight(p, n, v vector.SVector3, s float64) float64 {
 	l := pl.Location.Sub(p)
-	return lightHelper(l, n, pl.Intensity)
+	i := pl.Intensity
+	return lightHelperDiffuse(l, n, i) + lightHelperSpecular(l, n, v, i, s)
 }
 
 type DirectionalLight struct {
@@ -50,13 +65,14 @@ type DirectionalLight struct {
 	Intensity float64
 }
 
-func (dl DirectionalLight) ContributeLight(p, n vector.SVector3) float64 {
+func (dl DirectionalLight) ContributeLight(p, n, v vector.SVector3, s float64) float64 {
 	l := dl.Direction
-	return lightHelper(l, n, dl.Intensity)
+	i := dl.Intensity
+	return lightHelperDiffuse(l, n, i) + lightHelperSpecular(l, n, v, i, s)
 }
 
 type LightSource interface {
-	ContributeLight(p, n vector.SVector3) float64
+	ContributeLight(p, n, v vector.SVector3, s float64) float64
 }
 
 type Scene struct {
@@ -87,19 +103,22 @@ func testSpheres() Scene {
 	sc.Bg = background()
 	sc.Objects = append(sc.Objects,
 		Sphere{
-			center: vector.SVector3{0, -1, 3},
-			radius: 1,
-			shade:  color.RGBA{255, 0, 0, 0xff}})
+			center:   vector.SVector3{0, -1, 3},
+			radius:   1,
+			shade:    color.RGBA{255, 0, 0, 0xff},
+			specular: 500})
 	sc.Objects = append(sc.Objects,
 		Sphere{
-			center: vector.SVector3{2, 0, 4},
-			radius: 1,
-			shade:  color.RGBA{0, 0, 255, 0xff}})
+			center:   vector.SVector3{2, 0, 4},
+			radius:   1,
+			shade:    color.RGBA{0, 0, 255, 0xff},
+			specular: 500})
 	sc.Objects = append(sc.Objects,
 		Sphere{
-			center: vector.SVector3{-2, 0, 4},
-			radius: 1,
-			shade:  color.RGBA{0, 255, 0, 0xff}})
+			center:   vector.SVector3{-2, 0, 4},
+			radius:   1,
+			shade:    color.RGBA{0, 255, 0, 0xff},
+			specular: 10})
 
 	return sc
 }
@@ -109,20 +128,26 @@ func testSpheres2() Scene {
 	sc.Lighting = testLighting()
 	sc.Objects = append(sc.Objects,
 		Sphere{
-			center: vector.SVector3{0, -5001, 0},
-			radius: 5000,
-			shade:  color.RGBA{255, 255, 0, 0xff}})
+			center:   vector.SVector3{0, -5001, 0},
+			radius:   5000,
+			shade:    color.RGBA{255, 255, 0, 0xff},
+			specular: 1000})
 	return sc
 }
 
 type Sphere struct {
-	center vector.SVector3
-	radius float64
-	shade  color.Color
+	center   vector.SVector3
+	radius   float64
+	shade    color.Color
+	specular float64
 }
 
 func (s Sphere) Shade() color.Color {
 	return s.shade
+}
+
+func (s Sphere) Specular() float64 {
+	return s.specular
 }
 
 func (s Sphere) Center() vector.SVector3 {
@@ -152,6 +177,7 @@ func (s Sphere) Intersect(o, d vector.SVector3) (float64, float64) {
 type Intersectable interface {
 	Intersect(o, d vector.SVector3) (float64, float64)
 	Shade() color.Color
+	Specular() float64
 	Center() vector.SVector3
 	Normal(o, d vector.SVector3) vector.SVector3
 }
@@ -224,7 +250,8 @@ func traceRay(scene Scene, d vector.SVector3, near, far float64) color.Color {
 	n := p.Sub(obj.Center()).Norm()
 	//p = p.Add(n.Scale(ep)) // epsilon offset to try reducing artifacts
 	shade := obj.Shade()
-	lightLevel := scene.Lighting.ComputeLight(p, n)
+	spec := obj.Specular()
+	lightLevel := scene.Lighting.ComputeLight(p, n, d.Scale(-1), spec)
 	return scaleColor(shade, lightLevel)
 	//return color.RGBA{R: 0, G: 0, B: 200, A: 0xff}
 }

@@ -1,7 +1,6 @@
 package renderer
 
 import (
-	//"fmt"
 	"image"
 	"image/color"
 	"math"
@@ -14,14 +13,14 @@ func background() color.Color {
 }
 
 type Illumination struct {
-	Ambient     float64
-	Possitional []LightSource
+	Ambient    float64
+	Positional []LightSource
 }
 
 func (i Illumination) ComputeLight(p, n vector.SVector3) float64 {
 	atPoint := i.Ambient
 
-	for _, lightSource := range i.Possitional {
+	for _, lightSource := range i.Positional {
 		atPoint += lightSource.ContributeLight(p, n)
 	}
 	return atPoint
@@ -32,17 +31,18 @@ type PointLight struct {
 	Intensity float64
 }
 
-func lightHelper(l, p, n vector.SVector3, i float64) float64 {
+func lightHelper(l, n vector.SVector3, intensity float64) float64 {
 	dot := n.Dot(l)
 	if dot > 0 {
-		return i * dot / (n.Mag() * l.Mag())
+		tmp := dot / (n.Mag() * l.Mag())
+		return intensity * tmp
 	}
 	return 0
 }
 
 func (pl PointLight) ContributeLight(p, n vector.SVector3) float64 {
 	l := pl.Location.Sub(p)
-	return lightHelper(l, p, n, pl.Intensity)
+	return lightHelper(l, n, pl.Intensity)
 }
 
 type DirectionalLight struct {
@@ -51,8 +51,8 @@ type DirectionalLight struct {
 }
 
 func (dl DirectionalLight) ContributeLight(p, n vector.SVector3) float64 {
-	l := dl.Direction.Sub(p)
-	return lightHelper(l, p, n, dl.Intensity)
+	l := dl.Direction
+	return lightHelper(l, n, dl.Intensity)
 }
 
 type LightSource interface {
@@ -69,8 +69,14 @@ type Scene struct {
 func testLighting() Illumination {
 	var ill Illumination
 	ill.Ambient = 0.2
-	ill.Possitional = append(ill.Possitional, PointLight{Location: vector.SVector3{2, 1, 0}, Intensity: 0.6})
-	ill.Possitional = append(ill.Possitional, DirectionalLight{Direction: vector.SVector3{1, 4, 4}, Intensity: 0.2})
+	ill.Positional = append(ill.Positional,
+		PointLight{
+			Location:  vector.SVector3{2, 1, 0},
+			Intensity: .6})
+	ill.Positional = append(ill.Positional,
+		DirectionalLight{
+			Direction: vector.SVector3{1, 4, 4},
+			Intensity: .2})
 	return ill
 }
 
@@ -79,9 +85,21 @@ func testSpheres() Scene {
 	sc.Lighting = Illumination{Ambient: 1.0}
 
 	sc.Bg = background()
-	sc.Objects = append(sc.Objects, Sphere{center: vector.SVector3{0, -1, 3}, radius: 1, shade: color.RGBA{255, 0, 0, 0xff}})
-	sc.Objects = append(sc.Objects, Sphere{center: vector.SVector3{2, 0, 4}, radius: 1, shade: color.RGBA{0, 0, 255, 0xff}})
-	sc.Objects = append(sc.Objects, Sphere{center: vector.SVector3{-2, 0, 4}, radius: 1, shade: color.RGBA{0, 255, 0, 0xff}})
+	sc.Objects = append(sc.Objects,
+		Sphere{
+			center: vector.SVector3{0, -1, 3},
+			radius: 1,
+			shade:  color.RGBA{255, 0, 0, 0xff}})
+	sc.Objects = append(sc.Objects,
+		Sphere{
+			center: vector.SVector3{2, 0, 4},
+			radius: 1,
+			shade:  color.RGBA{0, 0, 255, 0xff}})
+	sc.Objects = append(sc.Objects,
+		Sphere{
+			center: vector.SVector3{-2, 0, 4},
+			radius: 1,
+			shade:  color.RGBA{0, 255, 0, 0xff}})
 
 	return sc
 }
@@ -129,7 +147,6 @@ func (s Sphere) Intersect(o, d vector.SVector3) (float64, float64) {
 	t1 := (-1*b + math.Sqrt(float64(discriminant))) / (2 * a)
 	t2 := (-1*b - math.Sqrt(float64(discriminant))) / (2 * a)
 	return t1, t2
-
 }
 
 type Intersectable interface {
@@ -142,7 +159,8 @@ type Intersectable interface {
 func Render() image.Image {
 	sc := testSpheres2()
 	vp := vector.SVector3{1, 1, 1} // viewport TODO:move into Scene
-	rec := image.Rect(0, 0, 256, 256)
+	//rec := image.Rect(0, 0, 256, 256)
+	rec := image.Rect(0, 0, 1024, 1024)
 	canvas := image.NewRGBA(rec)
 
 	for x := range rec.Dx() {
@@ -151,19 +169,33 @@ func Render() image.Image {
 			c := traceRay(sc, dir, vp.Z(), math.Inf(1))
 			canvas.Set(x, y, c)
 		}
-		//fmt.Print(".")
 	}
 
 	return canvas
 }
 
 func scaleColor(shade color.Color, intensity float64) color.Color {
+	if intensity >= 1.0 {
+		return shade
+	}
+	if intensity <= 0 {
+		return color.RGBA{
+			R: 0,
+			G: 0,
+			B: 0,
+			A: 0xff}
+	}
 	r, g, b, _ := shade.RGBA()
-	return color.RGBA{
-		R: uint8(intensity * float64(r)),
-		G: uint8(intensity * float64(g)),
-		B: uint8(intensity * float64(b)),
+	scale := float64(0xffff)
+	var nr float64 = intensity * float64(r)
+	var ng float64 = intensity * float64(g)
+	var nb float64 = intensity * float64(b)
+	tmpC := color.RGBA{
+		R: uint8(nr / scale * 255),
+		G: uint8(ng / scale * 255),
+		B: uint8(nb / scale * 255),
 		A: 0xff}
+	return tmpC
 }
 
 func traceRay(scene Scene, d vector.SVector3, near, far float64) color.Color {
@@ -186,12 +218,22 @@ func traceRay(scene Scene, d vector.SVector3, near, far float64) color.Color {
 	}
 
 	obj := scene.Objects[closest_i]
+
+	//ep := .00001
 	p := scene.Observer.Add(d.Scale(closest_dist))
 	n := p.Sub(obj.Center()).Norm()
+	//p = p.Add(n.Scale(ep)) // epsilon offset to try reducing artifacts
 	shade := obj.Shade()
 	lightLevel := scene.Lighting.ComputeLight(p, n)
 	return scaleColor(shade, lightLevel)
 	//return color.RGBA{R: 0, G: 0, B: 200, A: 0xff}
+}
+
+func almost(x, y, ep float64) bool {
+	if math.Abs(x-y) < ep {
+		return true
+	}
+	return false
 }
 
 func canvasToViewport(x, y int, vp vector.SVector3, rec image.Rectangle) vector.SVector3 {

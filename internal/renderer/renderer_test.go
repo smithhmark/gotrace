@@ -1,7 +1,10 @@
 package renderer
 
 import (
+	"fmt"
 	"image"
+	"image/color"
+	"math"
 	"testing"
 
 	"github.com/smithhmark/gotracer/internal/vector"
@@ -34,6 +37,183 @@ func TestCanvasToViewport(t *testing.T) {
 		if !rcvd.Almost(test.exp) {
 			t.Errorf("canvasToViewport(%v, %v, %v, %d) != %v, got: %v",
 				test.x, test.y, test.vp, test.cs, test.exp, rcvd)
+		}
+	}
+}
+
+func TestLightHelper(t *testing.T) {
+	//l, n vector.SVector3, intensity float64) float64 {
+	tests := []struct {
+		l         vector.SVector3
+		n         vector.SVector3
+		intensity float64
+		expected  float64
+	}{
+		{
+			vector.SVector3{0, 5, 0},
+			vector.SVector3{0, 1, 0},
+			1.0,
+			1.0,
+		},
+		{
+			vector.SVector3{0, 5, 0},
+			vector.SVector3{0, -1, 0},
+			1.0,
+			0.0,
+		},
+		{
+			vector.SVector3{0, 5, 0},
+			vector.SVector3{1, 1, 0}.Norm(),
+			1.0,
+			math.Sqrt(2) / 2.,
+		},
+		{
+			vector.SVector3{0, -5, 0},
+			vector.SVector3{1, 1, 0}.Norm(),
+			1.0,
+			0.0,
+		},
+	}
+	for _, test := range tests {
+		res := lightHelper(test.l, test.n, test.intensity)
+		if !almost(res, test.expected, 0.001) {
+			t.Errorf("lightHelper(%v, %v, %v) != %v, got: %v",
+				test.l, test.n, test.intensity, test.expected, res)
+		}
+	}
+}
+
+func TestComputeLight(t *testing.T) {
+	tests := []struct {
+		ill      Illumination
+		point    vector.SVector3
+		normal   vector.SVector3
+		expected float64
+	}{
+		{
+			Illumination{},
+			vector.SVector3{0, 0, 0},
+			vector.SVector3{0, 1, 0},
+			0.0,
+		},
+		{
+			Illumination{Ambient: 0.2},
+			vector.SVector3{0, 0, 0},
+			vector.SVector3{0, 1, 0},
+			0.2,
+		},
+		{
+			Illumination{Positional: []LightSource{
+				PointLight{
+					Location:  vector.SVector3{0, 5, 0},
+					Intensity: 1.0}}},
+			vector.SVector3{0, 0, 0},
+			vector.SVector3{0, 1, 0},
+			1.0,
+		},
+		{
+			Illumination{Positional: []LightSource{
+				PointLight{
+					Location:  vector.SVector3{0, 5, 0},
+					Intensity: .5}}},
+			vector.SVector3{0, 0, 0},
+			vector.SVector3{0, 1, 0},
+			0.5,
+		},
+		{
+			Illumination{Positional: []LightSource{
+				PointLight{
+					Location:  vector.SVector3{0, 5, 0},
+					Intensity: 1.0}}},
+			vector.SVector3{0, 0, 0},
+			vector.SVector3{0, -1, 0},
+			0.0,
+		},
+		{
+			Illumination{Positional: []LightSource{
+				PointLight{
+					Location:  vector.SVector3{0, 5, 0},
+					Intensity: 1.0}}},
+			vector.SVector3{0, 0, 0},
+			vector.SVector3{1, 1, 0}.Norm(),
+			math.Sqrt(2) / 2.0,
+		},
+		{
+			Illumination{Positional: []LightSource{
+				DirectionalLight{
+					Direction: vector.SVector3{0, 1, 0},
+					Intensity: 1},
+			}},
+			vector.SVector3{0, 0, 0},
+			vector.SVector3{0, 1, 0}.Norm(),
+			1,
+		},
+		{
+			Illumination{Positional: []LightSource{
+				DirectionalLight{
+					Direction: vector.SVector3{0, 5, 0},
+					Intensity: .50}}},
+			vector.SVector3{0, 0, 0},
+			vector.SVector3{1, 1, 0}.Norm(),
+			0.5 * math.Sqrt(2) / 2.0,
+		},
+		{
+			Illumination{Positional: []LightSource{
+				DirectionalLight{
+					Direction: vector.SVector3{0, 0, 0},
+					Intensity: 1},
+			}},
+			vector.SVector3{0, 0, 0},
+			vector.SVector3{0, 1, 0}.Norm(),
+			0,
+		},
+		{
+			Illumination{Positional: []LightSource{
+				PointLight{
+					Location:  vector.SVector3{0, 5, 0},
+					Intensity: .5},
+				DirectionalLight{
+					Direction: vector.SVector3{0, 1, 0},
+					Intensity: .5},
+			}},
+			vector.SVector3{0, 0, 0},
+			vector.SVector3{1, 1, 0}.Norm(),
+			math.Sqrt(2) / 2.0,
+		},
+	}
+
+	for tno, test := range tests {
+		rcvd := test.ill.ComputeLight(test.point, test.normal)
+		if !almost(rcvd, test.expected, 0.0001) {
+			t.Errorf("test: %d:ComputeLight()  != %v, got: %v",
+				tno, test.expected, rcvd)
+		}
+	}
+}
+
+func TestScaleColor(t *testing.T) {
+	tests := []struct {
+		r, g, b uint8
+		i       float64
+	}{
+		{255, 255, 255, 1.0},
+		{255, 255, 255, 0.0},
+		{255, 255, 255, 0.5},
+		{0, 255, 0, 1.0},
+		{0, 255, 0, 0.0},
+		{0, 255, 0, 0.50},
+	}
+	for _, test := range tests {
+		input := color.RGBA{R: test.r, G: test.g, B: test.b, A: 0xff}
+		expected := color.RGBA{
+			R: uint8(test.i * float64(test.r)),
+			G: uint8(test.i * float64(test.g)),
+			B: uint8(test.i * float64(test.b)),
+			A: 0xff}
+		fmt.Printf("running: scaleColor(%v, %v)\n", input, test.i)
+		rcvd := scaleColor(input, test.i)
+		if rcvd != expected {
+			t.Errorf("scaleColor(%v, %v) != %v, got:%v", input, test.i, expected, rcvd)
 		}
 	}
 }

@@ -85,97 +85,98 @@ func TestLightHelperDiffuse(t *testing.T) {
 
 func TestComputeLight_diffuse(t *testing.T) {
 	tests := []struct {
-		ill      Illumination
+		sc       Scene
 		point    vector.SVector3
 		normal   vector.SVector3
 		expected float64
 	}{
 		{
-			Illumination{},
+			Scene{},
 			vector.SVector3{0, 0, 0},
 			vector.SVector3{0, 1, 0},
 			0.0,
 		},
 		{
-			Illumination{Ambient: 0.2},
+			Scene{Lighting: Illumination{Ambient: 0.2}},
 			vector.SVector3{0, 0, 0},
 			vector.SVector3{0, 1, 0},
 			0.2,
 		},
 		{
-			Illumination{Positional: []LightSource{
+			Scene{Lighting: Illumination{Positional: []LightSource{
 				PointLight{
 					Location:  vector.SVector3{0, 5, 0},
-					Intensity: 1.0}}},
+					Intensity: 1.0}}}},
 			vector.SVector3{0, 0, 0},
 			vector.SVector3{0, 1, 0},
 			1.0,
 		},
 		{
-			Illumination{Positional: []LightSource{
+			Scene{Lighting: Illumination{Positional: []LightSource{
 				PointLight{
 					Location:  vector.SVector3{0, 5, 0},
-					Intensity: .5}}},
+					Intensity: .5}}}},
 			vector.SVector3{0, 0, 0},
 			vector.SVector3{0, 1, 0},
 			0.5,
 		},
 		{
-			Illumination{Positional: []LightSource{
+			Scene{Lighting: Illumination{Positional: []LightSource{
 				PointLight{
 					Location:  vector.SVector3{0, 5, 0},
-					Intensity: 1.0}}},
+					Intensity: 1.0}}}},
 			vector.SVector3{0, 0, 0},
 			vector.SVector3{0, -1, 0},
 			0.0,
 		},
 		{
-			Illumination{Positional: []LightSource{
+			Scene{Lighting: Illumination{Positional: []LightSource{
 				PointLight{
 					Location:  vector.SVector3{0, 5, 0},
-					Intensity: 1.0}}},
+					Intensity: 1.0}}}},
 			vector.SVector3{0, 0, 0},
 			vector.SVector3{1, 1, 0}.Norm(),
 			math.Sqrt(2) / 2.0,
 		},
 		{
-			Illumination{Positional: []LightSource{
+			Scene{Lighting: Illumination{Positional: []LightSource{
 				DirectionalLight{
 					Direction: vector.SVector3{0, 1, 0},
 					Intensity: 1},
-			}},
+			}}},
 			vector.SVector3{0, 0, 0},
 			vector.SVector3{0, 1, 0}.Norm(),
 			1,
 		},
 		{
-			Illumination{Positional: []LightSource{
+			Scene{Lighting: Illumination{Positional: []LightSource{
 				DirectionalLight{
 					Direction: vector.SVector3{0, 5, 0},
-					Intensity: .50}}},
+					Intensity: .50}}}},
 			vector.SVector3{0, 0, 0},
 			vector.SVector3{1, 1, 0}.Norm(),
 			0.5 * math.Sqrt(2) / 2.0,
 		},
 		{
-			Illumination{Positional: []LightSource{
+			Scene{Lighting: Illumination{Positional: []LightSource{
 				DirectionalLight{
 					Direction: vector.SVector3{0, 0, 0},
 					Intensity: 1},
-			}},
+			}}},
 			vector.SVector3{0, 0, 0},
 			vector.SVector3{0, 1, 0}.Norm(),
 			0,
 		},
 		{
-			Illumination{Positional: []LightSource{
-				PointLight{
-					Location:  vector.SVector3{0, 5, 0},
-					Intensity: .5},
-				DirectionalLight{
-					Direction: vector.SVector3{0, 1, 0},
-					Intensity: .5},
-			}},
+			Scene{Lighting: Illumination{
+				Positional: []LightSource{
+					PointLight{
+						Location:  vector.SVector3{0, 5, 0},
+						Intensity: .5},
+					DirectionalLight{
+						Direction: vector.SVector3{0, 1, 0},
+						Intensity: .5},
+				}}},
 			vector.SVector3{0, 0, 0},
 			vector.SVector3{1, 1, 0}.Norm(),
 			math.Sqrt(2) / 2.0,
@@ -185,7 +186,7 @@ func TestComputeLight_diffuse(t *testing.T) {
 	viewer := vector.SVector3{}
 
 	for tno, test := range tests {
-		rcvd := test.ill.ComputeLight(test.point, test.normal, viewer, specular)
+		rcvd := test.sc.ComputeLight(test.point, test.normal, viewer, specular)
 		if !almost(rcvd, test.expected, 0.0001) {
 			t.Errorf("test: %d:ComputeLight()  != %v, got: %v",
 				tno, test.expected, rcvd)

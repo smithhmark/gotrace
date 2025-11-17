@@ -17,11 +17,17 @@ type Illumination struct {
 	Positional []LightSource
 }
 
-func (i Illumination) ComputeLight(p, n, v vector.SVector3, s float64) float64 {
-	atPoint := i.Ambient
+func (sc Scene) ComputeLight(p, n, v vector.SVector3, s float64) float64 {
+	atPoint := sc.Lighting.Ambient
 
-	for _, lightSource := range i.Positional {
-		atPoint += lightSource.ContributeLight(p, n, v, s)
+	for _, lightSource := range sc.Lighting.Positional {
+		mn, mx := lightSource.GetShadowSearchRange()
+		d := lightSource.DirectionFrom(p)
+		blockingObjId, _ := closestIntersection(sc, p, d, mn, mx)
+		if blockingObjId < 0 {
+			// if there is object blocking this ligheSource
+			atPoint += lightSource.ContributeLight(p, n, v, s)
+		}
 	}
 	return atPoint
 }
@@ -54,9 +60,17 @@ func lightHelperSpecular(l, n, v vector.SVector3, intensity, specular float64) f
 
 }
 
+func (pl PointLight) DirectionFrom(p vector.SVector3) vector.SVector3 {
+	return pl.Location.Sub(p)
+}
+func (pl PointLight) GetShadowSearchRange() (float64, float64) {
+	return 0.0001, 1.0
+}
+
 func (pl PointLight) ContributeLight(p, n, v vector.SVector3, s float64) float64 {
-	l := pl.Location.Sub(p)
+	l := pl.DirectionFrom(p)
 	i := pl.Intensity
+
 	return lightHelperDiffuse(l, n, i) + lightHelperSpecular(l, n, v, i, s)
 }
 
@@ -65,14 +79,24 @@ type DirectionalLight struct {
 	Intensity float64
 }
 
+func (dl DirectionalLight) DirectionFrom(p vector.SVector3) vector.SVector3 {
+	return dl.Direction
+}
+
+func (dl DirectionalLight) GetShadowSearchRange() (float64, float64) {
+	return 0.0001, math.Inf(1)
+}
+
 func (dl DirectionalLight) ContributeLight(p, n, v vector.SVector3, s float64) float64 {
-	l := dl.Direction
+	l := dl.DirectionFrom(p)
 	i := dl.Intensity
 	return lightHelperDiffuse(l, n, i) + lightHelperSpecular(l, n, v, i, s)
 }
 
 type LightSource interface {
 	ContributeLight(p, n, v vector.SVector3, s float64) float64
+	GetShadowSearchRange() (float64, float64)
+	DirectionFrom(p vector.SVector3) vector.SVector3
 }
 
 type Scene struct {
@@ -224,12 +248,11 @@ func scaleColor(shade color.Color, intensity float64) color.Color {
 	return tmpC
 }
 
-func traceRay(scene Scene, d vector.SVector3, near, far float64) color.Color {
+func closestIntersection(scene Scene, o, d vector.SVector3, near, far float64) (int, float64) {
 	closest_dist := math.Inf(1)
 	var closest_i int = -1 // index into scene
-
 	for idx, ible := range scene.Objects {
-		t1, t2 := ible.Intersect(scene.Observer, d)
+		t1, t2 := ible.Intersect(o, d)
 		if t1 >= near && t1 < far && t1 < closest_dist {
 			closest_dist = t1
 			closest_i = idx
@@ -239,6 +262,10 @@ func traceRay(scene Scene, d vector.SVector3, near, far float64) color.Color {
 			closest_i = idx
 		}
 	}
+	return closest_i, closest_dist
+}
+func traceRay(scene Scene, d vector.SVector3, near, far float64) color.Color {
+	closest_i, closest_dist := closestIntersection(scene, scene.Observer, d, near, far)
 	if closest_i < 0 {
 		return scene.Bg
 	}
@@ -251,7 +278,7 @@ func traceRay(scene Scene, d vector.SVector3, near, far float64) color.Color {
 	//p = p.Add(n.Scale(ep)) // epsilon offset to try reducing artifacts
 	shade := obj.Shade()
 	spec := obj.Specular()
-	lightLevel := scene.Lighting.ComputeLight(p, n, d.Scale(-1), spec)
+	lightLevel := scene.ComputeLight(p, n, d.Scale(-1), spec)
 	return scaleColor(shade, lightLevel)
 	//return color.RGBA{R: 0, G: 0, B: 200, A: 0xff}
 }
